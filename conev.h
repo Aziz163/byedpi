@@ -69,15 +69,17 @@ struct eval {
     unsigned int mod_iter;
     enum eid type;
     struct eval *pair;
-    struct buffer buff;
+    //struct buffer buff;
     int flag;
     union {
         struct sockaddr_in in;
         struct sockaddr_in6 in6;
     };
-    ssize_t recv_count;
+    ssize_t recv_count, send_count;
     int attempt;
-    char cache;
+    int detect;
+    
+    char ev_in, ev_out;
 };
 
 struct poolhd {

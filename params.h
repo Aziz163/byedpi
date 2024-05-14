@@ -15,10 +15,12 @@
 #define OFFSET_SNI 1
 #define OFFSET_HOST 2
 
+/*
 #define DETECT_HTTP_LOCAT 1
 #define DETECT_HTTP_CLERR 2
 #define DETECT_TLS_INVSID 4
 #define DETECT_TLS_ALERT 8
+*/
 #define DETECT_TORST 16
 
 enum demode {

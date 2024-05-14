@@ -75,8 +75,7 @@ const char help_text[] = {
     "    -F, --tfo                 Enable TCP Fast Open\n"
     #endif
     "    -L, --late-conn           Waiting for request before connecting\n"
-    "    -A, --auto[=t,r,c,s,a,n]  Try desync params after this option\n"
-    "                              Detect: torst,redirect,cl_err,sid_inv,alert,none\n"
+    "    -A, --auto                Try desync params after this option\n"
     "    -u, --cache-ttl <sec>     Lifetime of cached desync params for IP\n"
     #ifdef TIMEOUT_SUPPORT
     "    -T, --timeout <sec>       Timeout waiting for response, after which trigger auto\n"
@@ -561,6 +560,7 @@ int main(int argc, char **argv)
                     case 't': 
                         dp->detect |= DETECT_TORST;
                         break;
+                    /*
                     case 'r': 
                         dp->detect |= DETECT_HTTP_LOCAT;
                         break;
@@ -575,6 +575,7 @@ int main(int argc, char **argv)
                         break;
                     case 'n': 
                         break;
+                    */
                     default:
                         invalid = 1;
                         continue;

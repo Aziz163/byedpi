@@ -393,6 +393,7 @@ int create_conn(struct poolhd *pool,
     pair->pair = val;
     pair->in6 = dst->in6;
     pair->flag = FLAG_CONN;
+    pair->ev_out = 1;
     val->type = EV_IGNORE;
     return 0;
 }
@@ -530,81 +531,55 @@ static inline int on_accept(struct poolhd *pool, struct eval *val)
             continue;
         }
         rval->in6 = client.in6;
+        rval->ev_out = 1;
     }
     return 0;
 }
 
 
 int on_tunnel(struct poolhd *pool, struct eval *val, 
-        char *buffer, size_t bfsize, int out)
+        char *buffer, size_t bfsize, int etype)
 {
-    ssize_t n = 0;
     struct eval *pair = val->pair;
     
-    if (pair->buff.data && out) {
-        pair = val;
-        val = val->pair;
-        
-        n = val->buff.size - val->buff.offset;
-        ssize_t sn = send(pair->fd, 
-            val->buff.data + val->buff.offset, n, 0);
-        if (sn != n) {
-            if (sn < 0 && get_e() != EAGAIN) {
-                uniperror("send");
-                return -1;
-            }
-            if (sn > 0)
-                val->buff.offset += sn;
-            return 0;
-        }
-        free(val->buff.data);
-        val->buff.data = 0;
-        val->buff.size = 0;
-        val->buff.offset = 0;
-        
-        if (mod_etype(pool, val, POLLIN) ||
-                mod_etype(pool, pair, POLLIN)) {
-            uniperror("mod_etype");
-            return -1;
+    if (etype & POLLOUT) {
+        val->ev_out = 1;
+        mod_etype(pool, val, POLLIN);
+        if (pair->ev_in) {
+            mod_etype(pool, pair, POLLIN);
         }
     }
-    do {
-        n = recv(val->fd, buffer, bfsize, 0);
-        if (n < 0 && get_e() == EAGAIN)
-            break;
-        if (n < 1) {
-            if (n) uniperror("recv");
+    if (etype & POLLIN) {
+        val->ev_in = 1;
+        if (!pair->ev_out) {
+            LOG(LOG_L, "POLLOUT not set\n");
+            mod_etype(pool, val, 0);
+            return 0;
+        }
+    }
+    else {
+        return 0;
+    }
+    ssize_t n = recv(val->fd, buffer, bfsize, 0);
+    if (n < 1) {
+        if (n) uniperror("recv");
+        return -1;
+    }
+    val->recv_count += n;
+    val->ev_in = 0;
+    
+    ssize_t sn = send(pair->fd, buffer, n, 0);
+    if (sn != n) {
+        if (sn < 0) {
+            uniperror("send");
             return -1;
         }
-        val->recv_count += n;
-        
-        ssize_t sn = send(pair->fd, buffer, n, 0);
-        if (sn != n) {
-            if (sn < 0) {
-                if (get_e() != EAGAIN) {
-                    uniperror("send");
-                    return -1;
-                }
-                sn = 0;
-            }
-            LOG(LOG_S, "EAGAIN, set POLLOUT (fd: %d)\n", pair->fd);
-            assert(!(val->buff.data || val->buff.offset));
-            
-            val->buff.size = n - sn;
-            if (!(val->buff.data = malloc(val->buff.size))) {
-                uniperror("malloc");
-                return -1;
-            }
-            memcpy(val->buff.data, buffer + sn, val->buff.size);
-            
-            if (mod_etype(pool, val, 0) ||
-                    mod_etype(pool, pair, POLLOUT)) {
-                uniperror("mod_etype");
-                return -1;
-            }
-            break;
-        }
-    } while (n == bfsize);
+        LOG(LOG_E, "send: %ld != %ld\n", sn, n);
+        return -1;
+    }
+    pair->send_count += sn;
+    pair->ev_out = 0;
+    mod_etype(pool, pair, POLLIN | POLLOUT);
     return 0;
 }
 
@@ -838,8 +813,7 @@ int event_loop(int srvfd)
                 continue;
                 
             case EV_TUNNEL:
-                if (on_tunnel(pool, val, 
-                        buffer, bfsize, etype & POLLOUT))
+                if (on_tunnel(pool, val, buffer, bfsize, etype))
                     del_event(pool, val);
                 continue;
         

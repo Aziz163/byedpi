@@ -83,13 +83,9 @@ void del_event(struct poolhd *pool, struct eval *val)
     #ifdef NOEPOLL
     assert(val->fd == pool->pevents[val->index].fd);
     #endif
-    if (val->buff.data) {
-        assert(val->buff.size);
-        free(val->buff.data);
-        val->buff.data = 0;
-    }
     close(val->fd);
     val->fd = -1;
+    
     val->mod_iter = pool->iters;
     pool->count--;
     
@@ -123,10 +119,6 @@ void destroy_pool(struct poolhd *pool)
         if (val->fd) {
             close(val->fd);
             val->fd = 0;
-        }
-        if (val->buff.data) {
-            free(val->buff.data);
-            val->buff.data = 0;
         }
     }
     free(pool->items);
@@ -171,6 +163,7 @@ struct eval *next_event(struct poolhd *pool, int *offs, int *type)
 int mod_etype(struct poolhd *pool, struct eval *val, int type)
 {
     assert(val->fd > 0);
+    val->mod_iter = pool->iters;
     struct epoll_event ev = {
         .events = EPOLLRDHUP | type, .data = {val}
     };
@@ -212,6 +205,7 @@ struct eval *next_event(struct poolhd *pool, int *offs, int *typel)
 int mod_etype(struct poolhd *pool, struct eval *val, int type)
 {
    assert(val->index >= 0 && val->index < pool->count);
+   val->mod_iter = pool->iters;
    pool->pevents[val->index].events = POLLRDHUP | type;
    return 0;
 }
